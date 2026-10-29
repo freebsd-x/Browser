@@ -86,8 +86,11 @@ int main(int argc, char** argv) {
     navigate = [](const std::string& raw_url) {
         if (tabs.empty()) return;
         std::string url = raw_url;
-        // Prepend https:// if no scheme
-        if (url.find("://") == std::string::npos && !url.starts_with("about:"))
+        // A local file (opened from Files / search) → file://; otherwise
+        // prepend https:// if no scheme
+        if (url.starts_with("/"))
+            url = "file://" + url;
+        else if (url.find("://") == std::string::npos && !url.starts_with("about:"))
             url = "https://" + url;
         tabs[active_tab].url   = url;
         tabs[active_tab].title = shortTitle(url);
@@ -440,7 +443,12 @@ int main(int argc, char** argv) {
 
     // ── Command-line pre-load ─────────────────────────────────────────────────
     std::string preload_url;
-    if (argc >= 2) preload_url = argv[1];
+    // xshell opens files with "--open <path>"; a bare path works too.
+    for (int i = 1; i < argc; ++i) {
+        std::string a = argv[i];
+        if (a == "--open") { if (i + 1 < argc) preload_url = argv[i + 1]; break; }
+        if (!a.empty() && a[0] != '-') { preload_url = a; break; }
+    }
 
     // ── Launch ────────────────────────────────────────────────────────────────
     return XApplication::Run(root_col, "/tmp/freebsdx.sock", /*sandboxed=*/false,
