@@ -160,13 +160,13 @@ int main(int argc, char** argv) {
 
         auto hdr = std::make_shared<TextWidget>("Bookmarks", 13.0f);
         hdr->setColor(Color{0.9f, 0.9f, 0.9f, 1.0f});
-        sidebar_col->addChild(std::make_shared<ContainerWidget>(4.0f, 0.0f, hdr));
+        sidebar_col->addChild([&]{ auto c = std::make_shared<FlexColumn>(std::vector<std::shared_ptr<Widget>>{hdr}); c->setPadding(4.0f); return c; }());
         sidebar_col->addChild(std::make_shared<DividerWidget>());
 
         if (bookmarks.empty()) {
             auto empty = std::make_shared<TextWidget>("No bookmarks", 12.0f);
             empty->setColor(Color{0.55f, 0.55f, 0.55f, 1.0f});
-            sidebar_col->addChild(std::make_shared<ContainerWidget>(8.0f, 0.0f, empty));
+            sidebar_col->addChild([&]{ auto c = std::make_shared<FlexColumn>(std::vector<std::shared_ptr<Widget>>{empty}); c->setPadding(8.0f); return c; }());
         } else {
             for (const auto& bm : bookmarks) {
                 auto title_txt = std::make_shared<TextWidget>(
@@ -277,8 +277,7 @@ int main(int argc, char** argv) {
     tab_bar_row->setPadding(4.0f);
     tab_bar_row->setGap(2.0f);
     tab_bar_row->setBackgroundColor(Color{0.11f, 0.11f, 0.13f, 1.0f});
-    tab_bar_row->setFixedSize(0.0f, 36.0f);
-    tab_bar_row->setFlexGrow(1.0f);
+    tab_bar_row->setFixedSize(0.0f, 36.0f);   // full width (the column bounds it), 36 px tall
 
     // ── Navigation bar ────────────────────────────────────────────────────────
     // Back button
@@ -378,7 +377,8 @@ int main(int argc, char** argv) {
     nav_bar->setGap(0.0f);
     nav_bar->setBackgroundColor(Color{0.15f, 0.15f, 0.17f, 1.0f});
     nav_bar->setFixedSize(0.0f, 44.0f);
-    nav_bar->setFlexGrow(1.0f);
+    // (No flex-grow: in the toolbar column it grew the bar vertically,
+    // splitting the window between the bars and the page.)
 
     // ── Toolbar row (tabs + nav) ───────────────────────────────────────────────
     auto toolbar_col = std::make_shared<FlexColumn>(std::vector<std::shared_ptr<Widget>>{
