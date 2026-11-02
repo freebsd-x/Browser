@@ -397,7 +397,7 @@ int main(int argc, char** argv) {
 
     auto content_sub = std::make_shared<TextWidget>(
         "WPE WebKit surface renders here", 13.0f);
-    content_sub->setColor(Color{0.35f, 0.35f, 0.38f, 1.0f});
+    content_sub->setColor(Color{0.56f, 0.56f, 0.60f, 1.0f});   // ≥ 4.5:1 on the dark page
 
     status_label = std::make_shared<TextWidget>("", 12.0f);
     status_label->setColor(Color{0.55f, 0.75f, 0.55f, 1.0f});
