@@ -120,37 +120,37 @@ int main(int argc, char** argv) {
         if (!g_xbus) return;
         bookmarks.clear();
 
-        // Request page 0; the compositor sends BookmarkPage responses; we
-        // accumulate until total_ pages are received.
-        static uint32_t total_pages = 1;
-        total_pages = 1;
-
-        std::function<void(uint32_t)> fetch_page = [&](uint32_t page_idx) {
+        // One page per request; the next is fetched while has_more_ is set.
+        static uint32_t generation = 0;
+        const uint32_t gen = ++generation;
+        auto fetch_page = std::make_shared<std::function<void(uint32_t)>>();
+        *fetch_page = [fetch_page, gen](uint32_t page_idx) {
             uint32_t payload = page_idx;
             g_xbus->Call("com.freebsdx.Bookmarks",
                          static_cast<uint32_t>(BookmarkOpcode::List),
                          {reinterpret_cast<const uint8_t*>(&payload), sizeof(payload)},
-                         [page_idx](const XBusMessage& resp) {
-                             if (resp.opcode_ !=
-                                 static_cast<uint32_t>(BookmarkOpcode::BookmarkPage)) return;
+                         [fetch_page, gen](const XBusMessage& resp) {
+                             if (gen != generation ||
+                                 resp.opcode_ != static_cast<uint32_t>(BookmarkOpcode::BookmarkPage)) {
+                                 *fetch_page = nullptr;   // ends the self-reference
+                                 return;
+                             }
                              BookmarkPage bp{};
                              std::memcpy(&bp, resp.payload_, sizeof(bp));
-                             if (bp.valid_) {
-                                 bookmarks.push_back({
-                                     std::string(bp.title_),
-                                     std::string(bp.url_)
-                                 });
+                             bp.title_[sizeof(bp.title_) - 1] = '\0';
+                             bp.url_[sizeof(bp.url_) - 1] = '\0';
+                             if (bp.valid_)
+                                 bookmarks.push_back({std::string(bp.title_), std::string(bp.url_)});
+                             if (bp.has_more_ && g_xbus) {
+                                 (*fetch_page)(bp.page_ + 1);
+                                 return;
                              }
-                             total_pages = bp.total_ > 0 ? bp.total_ : 1;
-                             if (page_idx + 1 < total_pages && g_xbus)
-                                 /* next page — would normally recurse but we
-                                    keep it simple: compositor sends each page
-                                    as a separate response for a single List call */;
+                             *fetch_page = nullptr;
                              rebuild_sidebar();
                              refresh_bookmark_state();
                          });
         };
-        fetch_page(0);
+        (*fetch_page)(0);
     };
 
     // ── Rebuild sidebar widget tree ───────────────────────────────────────────
@@ -353,8 +353,10 @@ int main(int argc, char** argv) {
         sidebar_open = !sidebar_open;
         // Toggling visibility is handled by rebuilding the main layout or
         // using a StackWidget; we set fixed width to 0 when hidden.
-        if (sidebar_col)
+        if (sidebar_col) {
             sidebar_col->setFixedSize(sidebar_open ? 220.0f : 0.0f, 0.0f);
+            sidebar_col->setVisibility(sidebar_open);
+        }
     });
 
     auto nav_bar = std::make_shared<FlexRow>(std::vector<std::shared_ptr<Widget>>{
@@ -419,6 +421,7 @@ int main(int argc, char** argv) {
     // ── Bookmarks sidebar ─────────────────────────────────────────────────────
     sidebar_col = std::make_shared<FlexColumn>(std::vector<std::shared_ptr<Widget>>{});
     sidebar_col->setFixedSize(0.0f, 0.0f); // hidden initially
+    sidebar_col->setVisibility(false);     // its contents don't get laid out into nothing
     sidebar_col->setBackgroundColor(Color{0.13f, 0.13f, 0.16f, 1.0f});
     sidebar_col->setPadding(8.0f);
 
