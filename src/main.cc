@@ -1,13 +1,16 @@
 // Browser — the desktop's web browser.
 //
-// The engine is Chromium, running as a Wayland app through xwayland-bridge. This
-// program checks that it's installed and starts it, or says what's missing. It
-// never pretends: a browser with no engine can't load anything.
+// Pages open in our own engine, sdk/xweb, built in from its viewer: sandboxed like
+// the other built-in apps, fetching through the compositor's broker. What it can't do
+// yet (scripts, forms, cookies) is a click away: "Open in Chromium" asks the shell to
+// start this program again with a "chromium:" target, and then it runs Chromium as a
+// Wayland app through xwayland-bridge, or says what's missing.
 //
-//   browser [--open] <path or URL>
+//   browser [--open] <path or URL>            our engine
+//   browser [--open] chromium:<path or URL>   Chromium
 //
-// Chromium runs with its own process sandbox, not under the app sandbox other
-// built-in apps have: it needs the network and files to do its job.
+// Chromium runs with its own process sandbox, not under the app sandbox: it needs
+// the network and files to do its job. So it's started before ours would close.
 
 #include "xkit/application.h"
 #include "xkit/widget.h"
@@ -30,7 +33,9 @@ bool openable(std::string_view target) {
            target.starts_with("http://") || target.starts_with("file://");
 }
 
-std::string targetFromArgs(int argc, char** argv) {
+constexpr std::string_view kChromium = "chromium:";
+
+std::string rawTarget(int argc, char** argv) {
     std::string target;
     for (int i = 1; i < argc; ++i) {
         std::string_view arg = argv[i];
@@ -40,7 +45,7 @@ std::string targetFromArgs(int argc, char** argv) {
             target = arg;
         }
     }
-    return openable(target) ? target : std::string();
+    return target;
 }
 
 std::string findEngine() {
@@ -75,9 +80,16 @@ void runEngine(const std::string& engine, const std::string& target) {
 
 }  // namespace
 
+int webViewMain(int argc, char** argv);   // sdk/xweb/tools/xweb_view.cc
+
 int main(int argc, char** argv) {
+    std::string target = rawTarget(argc, argv);
+    if (!target.starts_with(kChromium)) return webViewMain(argc, argv);
+
+    target = target.substr(kChromium.size());
+    if (!openable(target)) target.clear();
     const std::string engine = findEngine();
-    if (!engine.empty()) runEngine(engine, targetFromArgs(argc, argv));
+    if (!engine.empty()) runEngine(engine, target);
 
     // Still here: no engine, or it couldn't start.
     auto message = std::make_shared<TextWidget>(
